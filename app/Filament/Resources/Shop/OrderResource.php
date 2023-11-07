@@ -7,9 +7,12 @@ use App\Filament\Resources\Shop\OrderResource\Pages;
 use App\Filament\Resources\Shop\OrderResource\RelationManagers;
 use App\Filament\Resources\Shop\OrderResource\Widgets\OrderStats;
 use App\Forms\Components\AddressForm;
+use App\Mail\ProductSelected;
 use App\Models\Shop\Order;
 use App\Models\Shop\Product;
 use Filament\Forms;
+use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -19,6 +22,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Squire\Models\Currency;
 
 class OrderResource extends Resource
@@ -216,6 +221,35 @@ class OrderResource extends Resource
             return [
                 Forms\Components\Repeater::make('items')
                     ->relationship()
+                    ->extraItemActions([
+                        Action::make('reduce-to-zero')
+                            ->icon('heroicon-o-minus-circle')
+                            ->label('Reduce Quantity to Zero')
+                            ->action(function (array $arguments, Repeater $component, $state) {
+                                $itemData = $component->getItemState($arguments['item']);
+                                $itemData['qty'] = 0;
+
+                                $state[$arguments['item']] = $itemData;
+                                $component->state($state);
+                            }),
+                        Action::make('notify-about-product')
+                            ->icon('heroicon-o-shield-exclamation')
+                            ->label('Notify About Product')
+                            ->action(function (array $arguments) {
+                                Notification::make()
+                                    ->title('Item Selected')
+                                    ->icon('heroicon-o-check-badge')
+                                    ->body("{$arguments['item']} selected successfully!")
+                                    ->success()
+                                    ->send();
+                            }),
+                        Action::make('email-about-product')
+                            ->icon('heroicon-o-envelope')
+                            ->label('Email About Product')
+                            ->action(function (array $arguments) {
+                                Mail::to(Auth::user()->email)->send(new ProductSelected($arguments['item']));
+                            }),
+                    ])
                     ->schema([
                         Forms\Components\Select::make('shop_product_id')
                             ->label('Product')
